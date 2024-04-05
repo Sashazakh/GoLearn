@@ -10,14 +10,14 @@ import (
 )
 
 type Options struct {
-	countFlag     bool
-	inputFile     string
-	outputFile    string
-	ignoreCase    bool
-	duplicateFlag bool
-	uniqueFlag    bool
-	ignoreFields  int
-	ignoreChars   int
+	countFlag              bool
+	inputFile              string
+	outputFile             string
+	ignoreCase             bool
+	isDuplicateFlagEnabled bool
+	isUniqueFlagEnabled    bool
+	ignoreFields           int
+	ignoreChars            int
 }
 
 func (o *Options) parseArgs() {
@@ -25,8 +25,8 @@ func (o *Options) parseArgs() {
 	flag.StringVar(&o.inputFile, "input", "", "Input")
 	flag.StringVar(&o.outputFile, "output", "", "Output")
 	flag.BoolVar(&o.ignoreCase, "i", false, "Ignore case")
-	flag.BoolVar(&o.duplicateFlag, "d", false, "Print duplicates")
-	flag.BoolVar(&o.uniqueFlag, "u", false, "Print unique")
+	flag.BoolVar(&o.isDuplicateFlagEnabled, "d", false, "Print duplicates")
+	flag.BoolVar(&o.isUniqueFlagEnabled, "u", false, "Print unique")
 	flag.IntVar(&o.ignoreFields, "f", 0, "Ignore fields")
 	flag.IntVar(&o.ignoreChars, "s", 0, "Ignore chars")
 	flag.Parse()
@@ -93,9 +93,9 @@ func processLine(line string, options Options) string {
 }
 
 func printLine(output io.Writer, line string, count int, options Options) {
-	if count == 1 && options.uniqueFlag {
+	if count == 1 && options.isUniqueFlagEnabled {
 		fmt.Fprintln(output, line)
-	} else if count > 0 && (!options.uniqueFlag && !options.duplicateFlag) || (options.duplicateFlag && count > 1) {
+	} else if count > 0 && (!options.isUniqueFlagEnabled && !options.isDuplicateFlagEnabled) || (options.isDuplicateFlagEnabled && count > 1) {
 		if options.countFlag {
 			fmt.Fprintln(output, count, line)
 		} else {
