@@ -37,18 +37,22 @@ func SelectUsers(in, out chan interface{}) {
 
 	for email := range in {
 		waitGroup.Add(1)
-		if emailStr, ok := email.(string); ok {
-			go func(email string) {
-				defer waitGroup.Done()
-				user := GetUser(emailStr)
-				mutex.Lock()
-				if _, isProcessed := processedUsers[user.Email]; !isProcessed {
-					processedUsers[user.Email] = struct{}{}
-					out <- user
-				}
-				mutex.Unlock()
-			}(emailStr)
+		var emailStr string
+		var ok bool
+
+		if emailStr, ok = email.(string); !ok {
+			continue
 		}
+		go func(email string) {
+			defer waitGroup.Done()
+			user := GetUser(email)
+			mutex.Lock()
+			if _, isProcessed := processedUsers[user.Email]; !isProcessed {
+				processedUsers[user.Email] = struct{}{}
+				out <- user
+			}
+			mutex.Unlock()
+		}(emailStr)
 	}
 
 	waitGroup.Wait()
@@ -62,43 +66,43 @@ func SelectMessages(in, out chan interface{}) {
 	usersBatch := make([]User, 0, GetMessagesMaxUsersBatch)
 
 	for user := range in {
-		if currUser, ok := user.(User); ok {
-			usersBatch = append(usersBatch, currUser)
+		var currUser User
+		var ok bool
+		if currUser, ok = user.(User); !ok {
+			continue
+		}
 
-			if len(usersBatch) == GetMessagesMaxUsersBatch {
-				waitGroup.Add(1)
+		usersBatch = append(usersBatch, currUser)
 
-				go func(batch []User) {
-					defer waitGroup.Done()
-					messagesID, err := GetMessages(batch...)
-					if err != nil {
-						log.Printf("Error getting message: %s", err)
-						return
-					}
-					for _, id := range messagesID {
-						out <- id
-					}
-				}(usersBatch)
+		if len(usersBatch) == GetMessagesMaxUsersBatch {
+			waitGroup.Add(1)
 
-				usersBatch = make([]User, 0, GetMessagesMaxUsersBatch)
-			}
+			go func(batch []User) {
+				defer waitGroup.Done()
+				messagesID, err := GetMessages(batch...)
+				if err != nil {
+					log.Printf("Error getting message: %s", err)
+					return
+				}
+				for _, id := range messagesID {
+					out <- id
+				}
+			}(usersBatch)
+
+			usersBatch = make([]User, 0, GetMessagesMaxUsersBatch)
 		}
 	}
 
 	// Остаток батчей
 	if len(usersBatch) > 0 {
-		waitGroup.Add(1)
-		go func(batch []User) {
-			defer waitGroup.Done()
-			messageIDs, err := GetMessages(batch...)
-			if err != nil {
-				log.Printf("Error getting message: %s", err)
-				return
-			}
-			for _, id := range messageIDs {
-				out <- id
-			}
-		}(usersBatch)
+		messageIDs, err := GetMessages(usersBatch...)
+		if err != nil {
+			log.Printf("Error getting message: %s", err)
+			return
+		}
+		for _, id := range messageIDs {
+			out <- id
+		}
 	}
 
 	waitGroup.Wait()
@@ -114,18 +118,23 @@ func CheckSpam(in, out chan interface{}) {
 	for msg := range in {
 		waitGroup.Add(1)
 		semaphore <- struct{}{}
-		if msgID, ok := msg.(MsgID); ok {
-			go func(msg MsgID) {
-				defer waitGroup.Done()
-				hasSpam, err := HasSpam(msgID)
-				if err != nil {
-					log.Panicf("An error occurred while checking spam: %v", err)
-					return
-				}
-				out <- MsgData{ID: msgID, HasSpam: hasSpam}
-				<-semaphore
-			}(msgID)
+
+		var msgID MsgID
+		var ok bool
+		if msgID, ok = msg.(MsgID); !ok {
+			continue
 		}
+
+		go func(msg MsgID) {
+			defer waitGroup.Done()
+			hasSpam, err := HasSpam(msgID)
+			if err != nil {
+				log.Panicf("An error occurred while checking spam: %v", err)
+				return
+			}
+			out <- MsgData{ID: msgID, HasSpam: hasSpam}
+			<-semaphore
+		}(msgID)
 	}
 
 	waitGroup.Wait()
@@ -137,9 +146,13 @@ func CombineResults(in, out chan interface{}) {
 
 	var results []MsgData
 	for data := range in {
-		if msgData, ok := data.(MsgData); ok {
-			results = append(results, msgData)
+		var msgData MsgData
+		var ok bool
+		if msgData, ok = data.(MsgData); !ok {
+			continue
 		}
+
+		results = append(results, msgData)
 	}
 
 	sort.Slice(results, func(i, j int) bool {
